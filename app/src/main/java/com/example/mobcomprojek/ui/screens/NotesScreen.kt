@@ -1,6 +1,9 @@
 package com.example.mobcomprojek.ui.screens
 
-import androidx.compose.foundation.BorderStroke // Import yang benar
+// --- IMPORT BARU ---
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -8,6 +11,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+// --- IMPORT DIPERBARUI ---
+import androidx.compose.material.icons.automirrored.filled.ArrowRight // <-- DIPERBARUI
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Edit
@@ -23,20 +28,19 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+// --- IMPORT BARU ---
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
+import com.example.mobcomprojek.data.NoteItem
+import com.example.mobcomprojek.data.NoteRepository
 import com.example.mobcomprojek.ui.components.SectionHeader
 import com.example.mobcomprojek.ui.navigation.Screen
 import com.example.mobcomprojek.ui.theme.MobcomProjekTheme
-// import java.util.Locale // <-- Impor yang tidak terpakai dihapus
 
-// Data class sementara untuk "isi"
-data class NoteItem(val id: Int, val title: String, val content: String)
-
-// Data dipindahkan ke dalam Composable sebagai state
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -47,33 +51,49 @@ fun NotesScreen(
     // === STATE ===
     var searchQuery by remember { mutableStateOf("") }
 
-    // State "diangkat" ke sini agar bisa diubah
-    var recentNotes by remember {
-        mutableStateOf(List(6) { NoteItem(it, "Note Title ${it + 1}", "Content preview...") })
-    }
-    var categories by remember {
-        mutableStateOf(listOf(
-            "Category 1" to listOf(NoteItem(10, "Rapat Proyek", ""), NoteItem(11, "Revisi UI", "")),
-            "Category 2" to listOf(NoteItem(12, "Bahan Masak", ""), NoteItem(13, "Link Penting", ""))
-        ))
-    }
+    val allNotes = NoteRepository.notes
+    val allCategories = NoteRepository.categories
+
+    var showRenameDialog by remember { mutableStateOf(false) }
+    var categoryToRename by remember { mutableStateOf<com.example.mobcomprojek.data.Category?>(null) }
+    var newCategoryName by remember { mutableStateOf("") }
+
+    // --- PERBAIKAN: State untuk expand/collapse diangkat ke sini ---
+    // Kita akan menyimpan ID dari kategori yang TERTUTUP (collapsed)
+    var collapsedCategoryIds by remember { mutableStateOf<Set<Int>>(emptySet()) }
+    // ---
 
     // === LOGIC (FILTERING) ===
-    // Filter sekarang menggunakan state 'recentNotes'
-    val filteredRecentNotes = remember(searchQuery, recentNotes) {
+
+    // (Logika filter tidak berubah)
+    val filteredPinnedNotes = run {
+        val notes = allNotes.filter { it.isPinned }
         if (searchQuery.isBlank()) {
-            recentNotes
+            notes
         } else {
-            recentNotes.filter { it.title.contains(searchQuery, ignoreCase = true) }
+            notes.filter { it.title.contains(searchQuery, ignoreCase = true) }
         }
     }
 
-    // Filter sekarang menggunakan state 'categories'
-    val filteredCategories = remember(searchQuery, categories) {
+    val filteredRecentNotes = run {
+        val notes = allNotes.filter { !it.isPinned }.take(6)
         if (searchQuery.isBlank()) {
-            categories
+            notes
         } else {
-            categories
+            notes.filter { it.title.contains(searchQuery, ignoreCase = true) }
+        }
+    }
+
+    val filteredCategories = run {
+        val catsWithNotes = allCategories.map { category ->
+            val notesForCategory = allNotes.filter { !it.isPinned && it.categoryId == category.id }
+            category to notesForCategory
+        }
+
+        if (searchQuery.isBlank()) {
+            catsWithNotes
+        } else {
+            catsWithNotes
                 .mapNotNull { (category, notes) ->
                     val filteredNotes = notes.filter { it.title.contains(searchQuery, ignoreCase = true) }
                     if (filteredNotes.isNotEmpty()) category to filteredNotes else null
@@ -81,32 +101,59 @@ fun NotesScreen(
         }
     }
 
-    // Fungsi untuk memodifikasi state
-    val onDeleteCategory = { categoryTitle: String ->
-        // Buat list baru tanpa kategori yang dihapus
-        categories = categories.filterNot { (title, _) -> title == categoryTitle }
-    }
+    // === FUNGSI AKSI ===
 
-    val onRenameCategory = { oldTitle: String ->
-        // TODO: Tampilkan dialog untuk mendapatkan nama baru
-        val newTitle = "676767" // Contoh
-        categories = categories.map { (title, notes) ->
-            if (title == oldTitle) newTitle to notes else title to notes
+    // --- BARU: Fungsi untuk toggle expand/collapse ---
+    val onToggleCategoryExpansion = { categoryId: Int ->
+        collapsedCategoryIds = if (categoryId in collapsedCategoryIds) {
+            collapsedCategoryIds - categoryId // Buka
+        } else {
+            collapsedCategoryIds + categoryId // Tutup
         }
     }
+    // ---
 
+    // (Fungsi aksi lainnya tidak berubah)
+    val onDeleteCategory = { categoryId: Int ->
+        NoteRepository.deleteCategory(categoryId)
+    }
+
+    val onRenameTrigger = { category: com.example.mobcomprojek.data.Category ->
+        categoryToRename = category
+        newCategoryName = category.name
+        showRenameDialog = true
+    }
+
+    val onDismissDialog = {
+        showRenameDialog = false
+        categoryToRename = null
+        newCategoryName = ""
+    }
+
+    val onRenameConfirm = {
+        categoryToRename?.let {
+            if (newCategoryName.isNotBlank()) {
+                NoteRepository.renameCategory(it.id, newCategoryName)
+            }
+        }
+        onDismissDialog()
+    }
+
+    val onDeleteNote = { note: NoteItem ->
+        NoteRepository.deleteNote(note)
+    }
+
+    // --- UI Dimulai ---
     Scaffold(
         topBar = {
-            // === Top App Bar (dengan Search Bar Fungsional) ===
             TopAppBar(
                 title = {
-                    // 1. FITUR SEARCH BAR
                     OutlinedTextField(
                         value = searchQuery,
                         onValueChange = { searchQuery = it },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(end = 8.dp), // .height(50.dp) DIHAPUS
+                            .padding(end = 8.dp),
                         placeholder = { Text("Search notes by title...") },
                         leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search") },
                         singleLine = true,
@@ -135,38 +182,63 @@ fun NotesScreen(
             )
         }
     ) { innerPadding ->
-        // === Konten Utama (Menggunakan LazyColumn) ===
         LazyColumn(
             modifier = modifier.fillMaxSize(),
             contentPadding = innerPadding
         ) {
 
-            // --- Bagian "Recent Notes" (Grid) ---
-            item {
-                Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+            // (Bagian Pinned Notes tidak berubah)
+            if (filteredPinnedNotes.isNotEmpty()) {
+                item {
+                    Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        SectionHeader(title = "Pinned", showSeeAll = false)
+                        Spacer(modifier = Modifier.height(12.dp))
+                    }
+                }
+                items(filteredPinnedNotes.chunked(3)) { rowItems ->
+                    Row(
+                        modifier = Modifier.padding(horizontal = 20.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        for (note in rowItems) {
+                            NoteGridItem(note, Modifier.weight(1f)) {
+                                navController.navigate(Screen.NoteDetail.route + "/${note.id}")
+                            }
+                        }
+                        repeat(3 - rowItems.size) {
+                            Spacer(Modifier.weight(1f))
+                        }
+                    }
                     Spacer(modifier = Modifier.height(16.dp))
-                    SectionHeader(title = "Recent Notes", showSeeAll = false)
-                    Spacer(modifier = Modifier.height(12.dp))
                 }
             }
 
-            // Render 3 item per baris
-            items(filteredRecentNotes.chunked(3)) { rowItems ->
-                Row(
-                    modifier = Modifier.padding(horizontal = 20.dp),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    for (note in rowItems) {
-                        NoteGridItem(note, Modifier.weight(1f)) {
-                            navController.navigate(Screen.NoteDetail.route + "/${note.id}")
-                        }
-                    }
-                    // Jika baris tidak penuh (misal sisa 1 atau 2), tambahkan Spacer
-                    repeat(3 - rowItems.size) {
-                        Spacer(Modifier.weight(1f))
+            // (Bagian Recent Notes tidak berubah)
+            if (filteredRecentNotes.isNotEmpty()) {
+                item {
+                    Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        SectionHeader(title = "Recent Notes", showSeeAll = false)
+                        Spacer(modifier = Modifier.height(12.dp))
                     }
                 }
-                Spacer(modifier = Modifier.height(16.dp))
+                items(filteredRecentNotes.chunked(3)) { rowItems ->
+                    Row(
+                        modifier = Modifier.padding(horizontal = 20.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        for (note in rowItems) {
+                            NoteGridItem(note, Modifier.weight(1f)) {
+                                navController.navigate(Screen.NoteDetail.route + "/${note.id}")
+                            }
+                        }
+                        repeat(3 - rowItems.size) {
+                            Spacer(Modifier.weight(1f))
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
             }
 
             // --- Bagian Kategori (List) ---
@@ -178,34 +250,68 @@ fun NotesScreen(
                 }
             }
 
-            items(filteredCategories) { (categoryTitle, notes) ->
-                CategorySection(
-                    title = categoryTitle,
-                    notes = notes,
-                    onNoteClick = { note ->
-                        navController.navigate(Screen.NoteDetail.route + "/${note.id}")
-                    },
-                    // Kirim fungsi aksi ke Composable
-                    onRenameClick = { onRenameCategory(categoryTitle) },
-                    onDeleteClick = { onDeleteCategory(categoryTitle) },
-                    modifier = Modifier.padding(horizontal = 20.dp)
-                )
+            items(filteredCategories) { (category, notes) ->
+                if (notes.isNotEmpty()) {
+                    // --- PERBAIKAN: Kirim state & event ke CategorySection ---
+                    val isExpanded = category.id !in collapsedCategoryIds
+                    CategorySection(
+                        title = category.name,
+                        notes = notes,
+                        isExpanded = isExpanded, // <-- Kirim state
+                        onToggleExpansion = { onToggleCategoryExpansion(category.id) }, // <-- Kirim event
+                        onNoteClick = { note ->
+                            navController.navigate(Screen.NoteDetail.route + "/${note.id}")
+                        },
+                        onRenameClick = { onRenameTrigger(category) },
+                        onDeleteClick = { onDeleteCategory(category.id) },
+                        onDeleteNoteClick = onDeleteNote,
+                        modifier = Modifier.padding(horizontal = 20.dp)
+                    )
+                }
             }
 
             item {
                 Spacer(modifier = Modifier.height(20.dp))
             }
+        } // End LazyColumn
+
+        // (Dialog tidak berubah)
+        if (showRenameDialog) {
+            AlertDialog(
+                onDismissRequest = { onDismissDialog() },
+                title = { Text("Rename Category") },
+                text = {
+                    OutlinedTextField(
+                        value = newCategoryName,
+                        onValueChange = { newCategoryName = it },
+                        label = { Text("New category name") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = { onRenameConfirm() }) {
+                        Text("Rename")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { onDismissDialog() }) {
+                        Text("Cancel")
+                    }
+                }
+            )
         }
-    }
+        // ---
+
+    } // End Scaffold
 }
+
 
 /**
  * Composable untuk 1 item di dalam Grid "Recent Notes"
- * 4. TAMPILAN "RING" (Menggunakan OutlinedCard)
  */
 @Composable
 fun NoteGridItem(note: NoteItem, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    // Menggunakan OutlinedCard untuk efek "ring"
     OutlinedCard(
         modifier = modifier
             .height(120.dp)
@@ -245,21 +351,50 @@ fun CategorySection(
     title: String,
     notes: List<NoteItem>,
     modifier: Modifier = Modifier,
+    isExpanded: Boolean, // <-- BARU: Terima state
+    onToggleExpansion: () -> Unit, // <-- BARU: Terima event
     onNoteClick: (NoteItem) -> Unit,
-    onRenameClick: () -> Unit, // Terima lambda
-    onDeleteClick: () -> Unit  // Terima lambda
+    onRenameClick: () -> Unit,
+    onDeleteClick: () -> Unit,
+    onDeleteNoteClick: (NoteItem) -> Unit
 ) {
     var categoryMenuExpanded by remember { mutableStateOf(false) }
 
+    // --- DIHAPUS: State lokal dipindahkan ---
+    // var isExpanded by remember { mutableStateOf(true) }
+    // ---
+
+    // --- Animasi untuk rotasi ikon ---
+    val rotationAngle by animateFloatAsState(
+        targetValue = if (isExpanded) 90f else 0f, // <-- Gunakan parameter
+        label = "rotation"
+    )
+    // ---
+
     Column(modifier = modifier.fillMaxWidth()) {
         // === Header Kategori ===
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .size(24.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-            )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            // --- Klik baris ini untuk expand/collapse ---
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onToggleExpansion() } // <-- Gunakan parameter
+                .padding(vertical = 4.dp)
+        ) {
+            // --- Ikon Expand/Collapse ---
+            IconButton(
+                onClick = { onToggleExpansion() }, // <-- Gunakan parameter
+                modifier = Modifier.size(24.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowRight,
+                    contentDescription = if (isExpanded) "Collapse" else "Expand",
+                    modifier = Modifier.rotate(rotationAngle),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            // ---
+
             Spacer(modifier = Modifier.width(12.dp))
             Text(
                 text = title,
@@ -269,7 +404,7 @@ fun CategorySection(
             )
             Spacer(modifier = Modifier.weight(1f)) // Pendorong
 
-            // 3. FITUR AKSI KATEGORI (Delete, Rename, dll)
+            // (Box Aksi Kategori tidak berubah)
             Box {
                 IconButton(onClick = { categoryMenuExpanded = true }) {
                     Icon(
@@ -282,7 +417,6 @@ fun CategorySection(
                     expanded = categoryMenuExpanded,
                     onDismissRequest = { categoryMenuExpanded = false }
                 ) {
-                    // Panggil lambda saat diklik
                     DropdownMenuItem(
                         text = { Text("Rename") },
                         onClick = {
@@ -303,45 +437,48 @@ fun CategorySection(
         Spacer(modifier = Modifier.height(4.dp))
 
         // === Daftar notes di Kategori ===
-        Column {
-            notes.forEach { note ->
-                ListItem(
-                    headlineContent = {
-                        Text(note.title, fontWeight = FontWeight.SemiBold)
-                    },
-                    leadingContent = {
-                        Icon(
-                            Icons.Default.Description,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.secondary
-                        )
-                    },
-                    // 2. FITUR AKSI NOTE (Edit, Delete)
-                    trailingContent = {
-                        Row {
-                            IconButton(onClick = { /* TODO: Edit Note */ }) {
-                                Icon(
-                                    Icons.Default.Edit,
-                                    contentDescription = "Edit",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+        // --- Gunakan AnimatedVisibility ---
+        AnimatedVisibility(visible = isExpanded) { // <-- Gunakan parameter
+            Column {
+                notes.forEach { note ->
+                    ListItem(
+                        headlineContent = {
+                            Text(note.title, fontWeight = FontWeight.SemiBold)
+                        },
+                        leadingContent = {
+                            Icon(
+                                Icons.Default.Description,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.secondary
+                            )
+                        },
+                        trailingContent = {
+                            Row {
+                                IconButton(onClick = { onNoteClick(note) }) {
+                                    Icon(
+                                        Icons.Default.Edit,
+                                        contentDescription = "Edit",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                IconButton(onClick = { onDeleteNoteClick(note) }) {
+                                    Icon(
+                                        Icons.Default.Delete,
+                                        contentDescription = "Delete",
+                                        tint = MaterialTheme.colorScheme.error
+                                    )
+                                }
                             }
-                            IconButton(onClick = { /* TODO: Delete Note */ }) {
-                                Icon(
-                                    Icons.Default.Delete,
-                                    contentDescription = "Delete",
-                                    tint = MaterialTheme.colorScheme.error
-                                )
-                            }
-                        }
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable { onNoteClick(note) }
-                )
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { onNoteClick(note) }
+                    )
+                }
             }
         }
+        // ---
     }
 }
 

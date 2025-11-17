@@ -17,6 +17,10 @@ import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Notifications
+// --- IMPORT BARU ---
+import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.LightMode
+// ---
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -31,6 +35,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import com.example.mobcomprojek.data.NoteRepository
+import com.example.mobcomprojek.ui.navigation.Screen
 import com.example.mobcomprojek.ui.theme.cardHighlight
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -64,7 +70,12 @@ fun getWeeksForMonth(date: LocalDate): List<Pair<LocalDate, LocalDate>> {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun Home(modifier: Modifier = Modifier, navController: NavController) {
+fun Home(
+    modifier: Modifier = Modifier,
+    navController: NavController,
+    isDarkTheme: Boolean, // <-- BARU
+    onThemeToggle: () -> Unit // <-- BARU
+) {
     var currentDate by remember { mutableStateOf(LocalDate.now()) }
     val weeksInMonth = remember(currentDate) { getWeeksForMonth(currentDate) }
 
@@ -81,6 +92,13 @@ fun Home(modifier: Modifier = Modifier, navController: NavController) {
         selectedWeek = weeksInMonth.first()
     }
 
+    val allNotes = NoteRepository.notes
+    val recentNotes = remember(allNotes) {
+        allNotes.filter { !it.isPinned }.take(4)
+    }
+    val columnLeftNotes = recentNotes.filterIndexed { index, _ -> index % 2 == 0 }
+    val columnRightNotes = recentNotes.filterIndexed { index, _ -> index % 2 != 0 }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -88,7 +106,10 @@ fun Home(modifier: Modifier = Modifier, navController: NavController) {
             .background(MaterialTheme.colorScheme.background)
             .padding(bottom = 20.dp)
     ) {
-        HomeHeader()
+        HomeHeader(
+            isDarkTheme = isDarkTheme, // <-- Kirim state
+            onThemeToggle = onThemeToggle // <-- Kirim lambda
+        )
         Spacer(modifier = Modifier.height(26.dp))
 
         // === BAGIAN SCHEDULED TASKS ===
@@ -97,7 +118,17 @@ fun Home(modifier: Modifier = Modifier, navController: NavController) {
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp)
         ) {
-            SectionHeader(title = "Scheduled Tasks")
+            SectionHeader(
+                title = "Scheduled Tasks",
+                showSeeAll = true,
+                onSeeAllClick = {
+                    navController.navigate(Screen.Tasks.route) {
+                        popUpTo(navController.graph.startDestinationId) { saveState = true }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                }
+            )
             Spacer(modifier = Modifier.height(12.dp))
 
             MonthSelector(
@@ -136,13 +167,23 @@ fun Home(modifier: Modifier = Modifier, navController: NavController) {
 
         Spacer(modifier = Modifier.height(30.dp))
 
-        // === BAGIAN RECENT NOTES ===
+        // === BAGIAN RECENT NOTES (DIPERBARUI) ===
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp)
         ) {
-            SectionHeader(title = "Recent Notes")
+            SectionHeader(
+                title = "Recent Notes",
+                showSeeAll = true,
+                onSeeAllClick = {
+                    navController.navigate(Screen.Notes.route) {
+                        popUpTo(navController.graph.startDestinationId) { saveState = true }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                }
+            )
             Spacer(modifier = Modifier.height(10.dp))
 
             Row(
@@ -154,39 +195,41 @@ fun Home(modifier: Modifier = Modifier, navController: NavController) {
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    NoteCard(
-                        title = "Ide Proyek DueCal",
-                        content = "Fitur utama: sinkronisasi GCal, subtask, dan notes...",
-                        modifier = Modifier.height(170.dp)
-                    )
-                    NoteCard(
-                        title = "Resep Ayam",
-                        content = "Beli jahe, laos, kunyit...",
-                        modifier = Modifier.height(170.dp)
-                    )
+                    columnLeftNotes.forEach { note ->
+                        NoteCard(
+                            title = note.title,
+                            content = note.content,
+                            modifier = Modifier
+                                .height(170.dp)
+                                .clickable {
+                                    navController.navigate(Screen.NoteDetail.route + "/${note.id}")
+                                }
+                        )
+                    }
                 }
                 // Kolom Kanan
                 Column(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    NoteCard(
-                        title = "Catatan Meeting",
-                        content = "Bahas pembagian tugas backend dan frontend...",
-                        modifier = Modifier.height(170.dp)
-                    )
-                    NoteCard(
-                        title = "List Belanja",
-                        content = "Susu, Roti, Telur, Keju, Sereal...",
-                        modifier = Modifier.height(170.dp)
-                    )
+                    columnRightNotes.forEach { note ->
+                        NoteCard(
+                            title = note.title,
+                            content = note.content,
+                            modifier = Modifier
+                                .height(170.dp)
+                                .clickable {
+                                    navController.navigate(Screen.NoteDetail.route + "/${note.id}")
+                                }
+                        )
+                    }
                 }
             }
         }
     }
 }
 
-// === COMPOSABLE BARU (UNTUK SELEKTOR MINGGU) ===
+// (WeekSelector, WeekItem, MonthSelector tidak berubah)
 @Composable
 fun WeekSelector(
     weeks: List<Pair<LocalDate, LocalDate>>,
@@ -214,9 +257,6 @@ fun WeekSelector(
         }
     }
 }
-
-
-// === COMPOSABLE BARU (UNTUK ITEM MINGGU) ===
 @Composable
 fun WeekItem(
     weekLabel: String,
@@ -240,9 +280,6 @@ fun WeekItem(
         Text(dateRange, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = contentColor)
     }
 }
-
-
-// === COMPOSABLE SELEKTOR BULAN (IKON DIPERBAIKI) ===
 @Composable
 fun MonthSelector(
     currentDate: LocalDate,
@@ -256,7 +293,6 @@ fun MonthSelector(
         verticalAlignment = Alignment.CenterVertically
     ) {
         IconButton(onClick = { onMonthChange(-1) }) {
-            // ✔ FIXED: Menggunakan 'Icons.Filled'
             Icon(Icons.Filled.ChevronLeft, "Previous Month")
         }
 
@@ -267,17 +303,19 @@ fun MonthSelector(
         )
 
         IconButton(onClick = { onMonthChange(1) }) {
-            // ✔ FIXED: Menggunakan 'Icons.Filled'
             Icon(Icons.Filled.ChevronRight, "Next Month")
         }
     }
 }
 
 
-// === COMPOSABLE HEADER (TIDAK BERUBAH) ===
+// === COMPOSABLE HEADER (DIPERBARUI) ===
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeHeader() {
+fun HomeHeader(
+    isDarkTheme: Boolean, // <-- BARU
+    onThemeToggle: () -> Unit // <-- BARU
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -307,6 +345,25 @@ fun HomeHeader() {
                 color = MaterialTheme.colorScheme.onBackground
             )
         }
+
+        // --- BARU: Tombol Tema ---
+        IconButton(
+            onClick = onThemeToggle,
+            modifier = Modifier
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surface)
+                .size(40.dp)
+        ) {
+            Icon(
+                imageVector = if (isDarkTheme) Icons.Default.LightMode else Icons.Default.DarkMode,
+                contentDescription = if (isDarkTheme) "Ganti ke Light Mode" else "Ganti ke Dark Mode",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        // --- AKHIR PERBAIKAN ---
+
+        Spacer(modifier = Modifier.width(8.dp)) // Jarak antar tombol
+
         IconButton(
             onClick = { /* TODO */ },
             modifier = Modifier
@@ -323,7 +380,7 @@ fun HomeHeader() {
     }
 }
 
-// === COMPOSABLE NOTE CARD (TIDAK BERUBAH) ===
+// (NoteCard, SectionHeader, dan TaskCard tidak berubah)
 @Composable
 fun NoteCard(title: String, content: String, modifier: Modifier = Modifier) {
     Card(
@@ -332,13 +389,13 @@ fun NoteCard(title: String, content: String, modifier: Modifier = Modifier) {
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
-        Column(
+        Row(
             modifier = Modifier
                 .padding(16.dp)
-                .fillMaxHeight(),
-            verticalArrangement = Arrangement.SpaceBetween
+                .fillMaxSize(),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
@@ -353,19 +410,21 @@ fun NoteCard(title: String, content: String, modifier: Modifier = Modifier) {
                     maxLines = 4
                 )
             }
+            Spacer(modifier = Modifier.width(8.dp))
             Icon(
                 imageVector = Icons.Default.Description,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.align(Alignment.End)
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
 }
-
-// === COMPOSABLE HEADER SECTION (TIDAK BERUBAH) ===
 @Composable
-fun SectionHeader(title: String) {
+fun SectionHeader(
+    title: String,
+    showSeeAll: Boolean = true,
+    onSeeAllClick: () -> Unit = {}
+) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -378,17 +437,17 @@ fun SectionHeader(title: String) {
                 fontWeight = FontWeight.ExtraBold
             )
         )
-        TextButton(onClick = { /* TODO */ }) {
-            Text(
-                text = "Lihat Semua",
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Medium
-            )
+        if (showSeeAll) {
+            TextButton(onClick = onSeeAllClick) {
+                Text(
+                    text = "Lihat Semua",
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Medium
+                )
+            }
         }
     }
 }
-
-// === COMPOSABLE TASK CARD (TIDAK BERUBAH) ===
 @Composable
 fun TaskCard(title: String, date: String, category: String, color: Color) {
     Card(

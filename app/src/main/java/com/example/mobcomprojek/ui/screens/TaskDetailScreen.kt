@@ -12,10 +12,17 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.mobcomprojek.ui.theme.MobcomProjekTheme
+// --- IMPORT BARU ---
+import androidx.navigation.NavController
+import androidx.navigation.compose.rememberNavController
 
 // Ini adalah layar "Task" (Untitled T...)
 @Composable
-fun TaskDetailScreen(modifier: Modifier = Modifier) {
+fun TaskDetailScreen(
+    modifier: Modifier = Modifier,
+    navController: NavController, // <-- TAMBAHKAN INI
+    taskId: String? // <-- TAMBAHKAN INI
+) {
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -23,7 +30,8 @@ fun TaskDetailScreen(modifier: Modifier = Modifier) {
         contentAlignment = Alignment.Center
     ) {
         Text(
-            text = "Layar Detail Task (Editor)\n(Belum Dibuat)",
+            // --- KITA BISA GUNAKAN taskId DI SINI ---
+            text = "Layar Detail Task (Editor)\nTask ID: $taskId\n(Belum Dibuat)",
             style = MaterialTheme.typography.headlineMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
@@ -35,7 +43,11 @@ fun TaskDetailScreen(modifier: Modifier = Modifier) {
 @Composable
 private fun TaskDetailScreenPreviewLight() {
     MobcomProjekTheme(darkTheme = false) {
-        TaskDetailScreen()
+        // --- PERBARUI PREVIEW ---
+        TaskDetailScreen(
+            navController = rememberNavController(),
+            taskId = "preview_123"
+        )
     }
 }
 
@@ -43,6 +55,10 @@ private fun TaskDetailScreenPreviewLight() {
 @Composable
 private fun TaskDetailScreenPreviewDark() {
     MobcomProjekTheme(darkTheme = true) {
-        TaskDetailScreen()
+        // --- PERBARUI PREVIEW ---
+        TaskDetailScreen(
+            navController = rememberNavController(),
+            taskId = "preview_123"
+        )
     }
 }

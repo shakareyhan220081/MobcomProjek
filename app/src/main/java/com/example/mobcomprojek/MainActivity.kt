@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme // <-- PASTIKAN INI DI-IMPORT
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.RowScope
@@ -21,6 +22,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember // <-- PASTIKAN INI DI-IMPORT
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -37,12 +39,23 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            MobcomProjekTheme {
+            // --- PERBAIKAN: Tambahkan state tema ---
+            // Kita gunakan Boolean? (nullable) agar nilai null berarti "default sistem"
+            var isDarkTheme by rememberSaveable { mutableStateOf<Boolean?>(null) }
+            val systemTheme = isSystemInDarkTheme()
+            val useDarkTheme = isDarkTheme ?: systemTheme // Gunakan sistem jika null
+
+            MobcomProjekTheme(darkTheme = useDarkTheme) { // <-- Gunakan state
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    MainAppScreen()
+                    MainAppScreen(
+                        isDarkTheme = useDarkTheme, // <-- Kirim state
+                        onThemeToggle = { // <-- Kirim lambda
+                            isDarkTheme = !useDarkTheme // Toggle
+                        }
+                    )
                 }
             }
         }
@@ -51,8 +64,10 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainAppScreen() {
-
+fun MainAppScreen(
+    isDarkTheme: Boolean, // <-- Terima state
+    onThemeToggle: () -> Unit // <-- Terima lambda
+) {
     val navController = rememberNavController()
     var isSheetOpen by rememberSaveable { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState()
@@ -89,7 +104,7 @@ fun MainAppScreen() {
                     leadingContent = {
                         Icon(Icons.AutoMirrored.Filled.ListAlt, contentDescription = "Tugas Baru")
                     },
-                    modifier = Modifier.clickable { isSheetOpen = false }
+                    modifier = Modifier.clickable { isSheetOpen = false } // TODO: Navigasi ke Tugas Baru
                 )
 
                 ListItem(
@@ -97,7 +112,10 @@ fun MainAppScreen() {
                     leadingContent = {
                         Icon(Icons.AutoMirrored.Filled.Notes, contentDescription = "Catatan Baru")
                     },
-                    modifier = Modifier.clickable { isSheetOpen = false }
+                    modifier = Modifier.clickable {
+                        isSheetOpen = false
+                        navController.navigate(Screen.NoteDetail.route + "/new")
+                    }
                 )
             }
         }
@@ -116,11 +134,14 @@ fun MainAppScreen() {
     ) { innerPadding ->
         AppNavHost(
             navController = navController,
-            modifier = Modifier.padding(innerPadding)
+            modifier = Modifier.padding(innerPadding),
+            isDarkTheme = isDarkTheme, // <-- Kirim state ke NavHost
+            onThemeToggle = onThemeToggle // <-- Kirim lambda ke NavHost
         )
     }
 }
 
+// (AppNavigationBar dan AppNavItem tidak perlu diubah)
 @Composable
 fun AppNavigationBar(
     navController: NavController,

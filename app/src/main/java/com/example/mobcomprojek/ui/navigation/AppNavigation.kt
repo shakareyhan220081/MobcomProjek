@@ -3,8 +3,10 @@ package com.example.mobcomprojek.ui.navigation
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.navArgument
 import com.example.mobcomprojek.ui.screens.Home
 import com.example.mobcomprojek.ui.screens.NoteDetailScreen
 import com.example.mobcomprojek.ui.screens.NotesScreen
@@ -15,7 +17,9 @@ import com.example.mobcomprojek.ui.screens.TasksScreen
 @Composable
 fun AppNavHost(
     navController: NavHostController,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isDarkTheme: Boolean, // <-- BARU: Terima state
+    onThemeToggle: () -> Unit // <-- BARU: Terima lambda
 ) {
     NavHost(
         navController = navController,
@@ -24,28 +28,42 @@ fun AppNavHost(
     ) {
         // 4 Layar Utama
         composable(Screen.Home.route) {
-            // Kita juga berikan NavController ke Home
-            Home(modifier = Modifier, navController = navController)
+            Home(
+                modifier = Modifier,
+                navController = navController,
+                isDarkTheme = isDarkTheme, // <-- Kirim state
+                onThemeToggle = onThemeToggle // <-- Kirim lambda
+            )
         }
         composable(Screen.Notes.route) {
-            // NotesScreen sekarang menerima NavController
             NotesScreen(modifier = Modifier, navController = navController)
         }
         composable(Screen.Tasks.route) {
-            // Kita berikan juga ke TasksScreen
             TasksScreen(modifier = Modifier, navController = navController)
         }
         composable(Screen.Settings.route) {
             SettingsScreen(modifier = Modifier)
         }
 
-        // 2 Layar Detail
-        // (Kita tambahkan argumen {noteId} agar dinamis)
-        composable(Screen.NoteDetail.route + "/{noteId}") {
-            NoteDetailScreen(modifier = Modifier)
+
+        composable(
+            route = Screen.NoteDetail.route + "/{noteId}",
+            arguments = listOf(navArgument("noteId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val noteId = backStackEntry.arguments?.getString("noteId")
+
+            NoteDetailScreen(
+                navController = navController,
+                noteId = noteId
+            )
         }
-        composable(Screen.TaskDetail.route + "/{taskId}") {
-            TaskDetailScreen(modifier = Modifier)
+
+        composable(Screen.TaskDetail.route + "/{taskId}") { backStackEntry ->
+            val taskId = backStackEntry.arguments?.getString("taskId")
+            TaskDetailScreen(
+                navController = navController,
+                taskId = taskId
+            )
         }
     }
 }
