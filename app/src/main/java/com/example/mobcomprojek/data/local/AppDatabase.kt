@@ -1,31 +1,31 @@
-package com.example.mobcomprojek.data
+package com.example.mobcomprojek.data.local
 
 import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import com.example.mobcomprojek.data.*
 
 @Database(
-    entities = [Category::class, TaskParent::class, Subtask::class],
-    version = 1 // Naikkan versi jika Anda mengubah skema
+    entities = [NoteItem::class, Category::class, TaskParent::class, Subtask::class],
+    version = 1,
+    exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
-
-    abstract fun taskDao(): TaskDao
+    abstract fun appDao(): AppDao
 
     companion object {
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
-        fun getInstance(context: Context): AppDatabase {
+        fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
-                    "task_database" // Nama file database
+                    "duecal_local_db"
                 )
-                    // Hapus .fallbackToDestructiveMigration() untuk rilis produksi
-                    .fallbackToDestructiveMigration()
+                    .fallbackToDestructiveMigration() // Reset DB jika model berubah (aman utk development)
                     .build()
                 INSTANCE = instance
                 instance

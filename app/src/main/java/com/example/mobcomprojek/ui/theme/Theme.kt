@@ -64,7 +64,7 @@ val ColorScheme.card_dark: Color
 @Composable
 fun MobcomProjekTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    // Dynamic color is available on Android 12+ (S)
+    fontScale: Float = 1.0f,
     dynamicColor: Boolean = true,
     content: @Composable () -> Unit
 ) {
@@ -89,7 +89,7 @@ fun MobcomProjekTheme(
 
     MaterialTheme(
         colorScheme = colorScheme,
-        typography = Typography,
+        typography = getCustomTypography(fontScale),
         content = content
     )
 }

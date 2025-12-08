@@ -13,16 +13,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
-import androidx.navigation.compose.rememberNavController
 import com.example.mobcomprojek.data.Subtask
 import com.example.mobcomprojek.viewmodel.TaskDetailViewModel
-import com.example.mobcomprojek.viewmodel.TaskDetailViewModelFactory
+import com.example.mobcomprojek.data.api.WeatherRepository // Import untuk Cuaca
 import java.util.Date
 import java.util.Locale
 
@@ -31,20 +29,24 @@ import java.util.Locale
 fun TaskDetailScreen(
     modifier: Modifier = Modifier,
     navController: NavController,
-    viewModel: TaskDetailViewModel // Terima ViewModel
+    taskId: String?,
+    viewModel: TaskDetailViewModel = viewModel()
 ) {
-    // === STATE ===
-    // 1. Ambil state dari ViewModel
+    // 1. Load Data saat Layar Dibuka
+    LaunchedEffect(taskId) {
+        viewModel.loadTask(taskId)
+    }
+
+    // 2. Ambil state dari ViewModel
     val taskWithSubtasks by viewModel.taskState.collectAsStateWithLifecycle()
 
-    // 2. State lokal untuk UI, di-reset saat data DB berubah
+    // 3. State lokal untuk UI (Buffer editing)
     var title by remember(taskWithSubtasks) {
         mutableStateOf(taskWithSubtasks?.taskParent?.title ?: "")
     }
     var subtasks by remember(taskWithSubtasks) {
         mutableStateOf(taskWithSubtasks?.subtasks ?: emptyList())
     }
-    // Simpan list asli untuk perbandingan saat save
     val originalSubtasks = remember(taskWithSubtasks) {
         taskWithSubtasks?.subtasks ?: emptyList()
     }
@@ -63,11 +65,12 @@ fun TaskDetailScreen(
         mutableStateOf(taskWithSubtasks?.taskParent?.priority ?: "None")
     }
 
-    // State untuk dialog
+    // State untuk dialog UI
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
     var showPriorityMenu by remember { mutableStateOf(false) }
 
+    // Picker States
     val datePickerState = rememberDatePickerState(
         initialSelectedDateMillis = selectedDueDate ?: System.currentTimeMillis()
     )
@@ -76,11 +79,14 @@ fun TaskDetailScreen(
         initialMinute = selectedReminderTime?.get(Calendar.MINUTE) ?: 0
     )
 
-    // Formatters
     val dateFormatter = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
     val timeFormatter = SimpleDateFormat("hh:mm a", Locale.getDefault())
 
-    // === LOGIC (Hanya modifikasi state LOKAL) ===
+    // === DATA CUACA (QoL Feature) ===
+    val weatherIcon = WeatherRepository.getWeatherIcon(WeatherRepository.currentWeatherCode)
+    val currentTemp = WeatherRepository.currentTemp
+
+    // === LOGIC ===
 
     val onSubtaskCheckedChange = { subtask: Subtask, isChecked: Boolean ->
         subtasks = subtasks.map {
@@ -101,8 +107,8 @@ fun TaskDetailScreen(
     val onAddNewSubtask = {
         if (newSubtaskTitle.isNotBlank()) {
             val newSub = Subtask(
-                id = 0, // ID 0 (auto-generate by Room)
-                taskParentId = taskWithSubtasks?.taskParent?.id ?: 0,
+                id = "",
+                taskId = taskWithSubtasks?.taskParent?.id ?: "",
                 title = newSubtaskTitle,
                 isCompleted = false
             )
@@ -112,7 +118,6 @@ fun TaskDetailScreen(
     }
 
     val onSaveChanges: () -> Unit = {
-        // Panggil ViewModel untuk menyimpan
         viewModel.saveChanges(
             title = title,
             dueDate = selectedDueDate,
@@ -126,17 +131,15 @@ fun TaskDetailScreen(
 
     // === UI ===
 
-    // Tampilkan loading jika data belum siap
     if (taskWithSubtasks == null) {
         Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             CircularProgressIndicator()
         }
     } else {
-        // Data sudah siap, tampilkan UI
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text(if (taskWithSubtasks?.taskParent?.id == 0) "New Task" else "Edit Task") },
+                    title = { Text(if (taskWithSubtasks?.taskParent?.id == "") "New Task" else "Edit Task") },
                     navigationIcon = {
                         IconButton(onClick = { navController.popBackStack() }) {
                             Icon(Icons.Default.ArrowBack, contentDescription = "Back")
@@ -167,9 +170,7 @@ fun TaskDetailScreen(
                     dismissButton = {
                         TextButton(onClick = { showDatePicker = false }) { Text("Cancel") }
                     }
-                ) {
-                    DatePicker(state = datePickerState)
-                }
+                ) { DatePicker(state = datePickerState) }
             }
 
             if (showTimePicker) {
@@ -182,15 +183,12 @@ fun TaskDetailScreen(
                             cal.set(Calendar.MINUTE, timePickerState.minute)
                             selectedReminderTime = cal
                             showTimePicker = false
-                            // TODO: Implementasi REAL reminder menggunakan AlarmManager
                         }) { Text("OK") }
                     }
-                ) {
-                    TimePicker(state = timePickerState)
-                }
+                ) { TimePicker(state = timePickerState) }
             }
 
-            // --- KONTEN UTAMA ---
+            // --- KONTEN FORM ---
             LazyColumn(
                 modifier = modifier
                     .fillMaxSize()
@@ -198,8 +196,7 @@ fun TaskDetailScreen(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-
-                // JUDUL TASK
+                // 1. Judul Task
                 item {
                     OutlinedTextField(
                         value = title,
@@ -210,64 +207,90 @@ fun TaskDetailScreen(
                     )
                 }
 
-                // TAMPILAN NILAI TERPILIH
+                // 2. Detail Grid (Due Date, Priority, Reminder + WEATHER)
                 item {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceAround
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
                     ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("Due Date", style = MaterialTheme.typography.labelMedium)
-                            Text(
-                                text = selectedDueDate?.let { dateFormatter.format(Date(it)) } ?: "Not Set",
-                                style = MaterialTheme.typography.bodyLarge,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("Reminder", style = MaterialTheme.typography.labelMedium)
-                            Text(
-                                text = selectedReminderTime?.let { timeFormatter.format(it.time) } ?: "Not Set",
-                                style = MaterialTheme.typography.bodyLarge,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("Priority", style = MaterialTheme.typography.labelMedium)
-                            Text(
-                                text = selectedPriority,
-                                style = MaterialTheme.typography.bodyLarge,
-                                fontWeight = FontWeight.Bold
-                            )
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            // Column 1: Date & Time
+                            Column(horizontalAlignment = Alignment.Start) {
+                                Text("Deadline", style = MaterialTheme.typography.labelSmall)
+                                Text(
+                                    text = selectedDueDate?.let { dateFormatter.format(Date(it)) } ?: "-",
+                                    style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold
+                                )
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    text = selectedReminderTime?.let { timeFormatter.format(it.time) } ?: "-",
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+
+                            // Column 2: Priority
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("Priority", style = MaterialTheme.typography.labelSmall)
+                                Text(
+                                    text = selectedPriority,
+                                    style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold,
+                                    color = if(selectedPriority=="High") Color.Red else MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+
+                            // Column 3: WEATHER INFO (Integrasi API)
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text("Forecast", style = MaterialTheme.typography.labelSmall)
+                                if (currentTemp != null) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(weatherIcon, style = MaterialTheme.typography.titleMedium)
+                                        Spacer(Modifier.width(4.dp))
+                                        Text(
+                                            "${currentTemp.toInt()}°C",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                } else {
+                                    Text("N/A", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
                         }
                     }
                 }
 
-                // TOMBOL AKSI
+                // 3. Tombol Aksi
                 item {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(
-                            onClick = { showTimePicker = true },
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                            )
-                        ) {
-                            Icon(Icons.Default.Alarm, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
-                            Text("Set Reminder")
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(
+                                onClick = { showTimePicker = true },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                            ) {
+                                Icon(Icons.Default.Alarm, null, Modifier.size(18.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text("Reminder")
+                            }
+                            Button(
+                                onClick = { showDatePicker = true },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                            ) {
+                                Icon(Icons.Default.CalendarToday, null, Modifier.size(18.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text("Due Date")
+                            }
                         }
-                        Button(
-                            onClick = { showDatePicker = true },
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                            )
-                        ) {
-                            Icon(Icons.Default.CalendarToday, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
-                            Text("Set Due Date")
-                        }
+
                         Box {
                             Button(
                                 onClick = { showPriorityMenu = true },
@@ -277,37 +300,25 @@ fun TaskDetailScreen(
                                     contentColor = MaterialTheme.colorScheme.onSecondaryContainer
                                 )
                             ) {
-                                Icon(Icons.Default.Flag, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
-                                Text("Set Priority")
+                                Icon(Icons.Default.Flag, null, Modifier.size(18.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text("Priority: $selectedPriority")
                             }
                             DropdownMenu(
                                 expanded = showPriorityMenu,
                                 onDismissRequest = { showPriorityMenu = false }
                             ) {
-                                DropdownMenuItem(
-                                    text = { Text("High") },
-                                    onClick = { selectedPriority = "High"; showPriorityMenu = false }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Medium") },
-                                    onClick = { selectedPriority = "Medium"; showPriorityMenu = false }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Low") },
-                                    onClick = { selectedPriority = "Low"; showPriorityMenu = false }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("None") },
-                                    onClick = { selectedPriority = "None"; showPriorityMenu = false }
-                                )
+                                listOf("High", "Medium", "Low", "None").forEach { p ->
+                                    DropdownMenuItem(text = { Text(p) }, onClick = { selectedPriority = p; showPriorityMenu = false })
+                                }
                             }
                         }
                     }
                 }
 
-                // --- SUBTASKS ---
+                // 4. Subtasks
                 item {
-                    Divider(modifier = Modifier.padding(top = 8.dp))
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                     Text(
                         text = "Subtasks",
                         style = MaterialTheme.typography.titleMedium,
@@ -315,6 +326,7 @@ fun TaskDetailScreen(
                         modifier = Modifier.padding(top = 16.dp)
                     )
                 }
+
                 items(subtasks) { subtask ->
                     EditSubtaskItem(
                         subtask = subtask,
@@ -323,6 +335,8 @@ fun TaskDetailScreen(
                         onDelete = { onDeleteSubtask(subtask) }
                     )
                 }
+
+                // Input Subtask Baru
                 item {
                     OutlinedTextField(
                         value = newSubtaskTitle,
@@ -342,7 +356,8 @@ fun TaskDetailScreen(
     }
 }
 
-// Composable EditSubtaskItem (Tidak diubah)
+// --- HELPER COMPOSABLES ---
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditSubtaskItem(
@@ -382,7 +397,6 @@ fun EditSubtaskItem(
     }
 }
 
-// Composable TimePickerDialog (Helper)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TimePickerDialog(
@@ -415,10 +429,4 @@ fun TimePickerDialog(
             }
         }
     }
-}
-
-@Preview(showBackground = true)
-@Composable
-private fun TaskDetailScreenPreview() {
-    TaskDetailScreen(navController = rememberNavController(), viewModel = viewModel())
 }

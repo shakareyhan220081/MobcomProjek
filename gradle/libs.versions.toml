@@ -9,7 +9,9 @@ lifecycleRuntimeKtx = "2.9.4"
 activityCompose = "1.11.0"
 composeBom = "2025.02.00"
 navigationCompose = "2.8.0-beta05"
-
+room = "2.6.1"
+# UPDATE: Versi ini cocok dengan Kotlin 2.0.21
+ksp = "2.0.21-1.0.28"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -29,9 +31,14 @@ androidx-compose-material3 = { group = "androidx.compose.material3", name = "mat
 androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigationCompose" }
 androidx-compose-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
 androidx-compose-foundation = { group = "androidx.compose.foundation", name = "foundation" }
+androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
+androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
+# Plugin compiler tetap ada di libraries untuk referensi dependensi jika perlu, tapi KSP plugin utama ada di [plugins]
+androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
-
+# Definisi Plugin KSP yang benar
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }

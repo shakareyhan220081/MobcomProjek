@@ -1,84 +1,85 @@
 package com.example.mobcomprojek.data
 
-import androidx.room.Embedded
 import androidx.room.Entity
-import androidx.room.ForeignKey
 import androidx.room.PrimaryKey
-import androidx.room.Relation
+import com.google.firebase.firestore.PropertyName
 
-// 1. Kategori (Paling atas)
+// =======================
+// 1. DATA MODEL CATATAN
+// =======================
+@Entity(tableName = "notes")
+data class NoteItem(
+    @PrimaryKey val id: String = "",
+    val userId: String = "",
+    val title: String = "",
+    val content: String = "",
+    val categoryId: String = "",
+    val reminderTime: Long? = null,
+    val dueDate: Long? = null,
+    val priority: String = "None",
+
+    @get:PropertyName("isPinned")
+    @set:PropertyName("isPinned")
+    var isPinned: Boolean = false,
+
+    val createdAt: Long = System.currentTimeMillis(),
+
+    // BARU: Penanda apakah sudah sinkron ke Firebase
+    // Exclude agar tidak ikut terupload ke Firebase sebagai field
+    @get:PropertyName("ignore_sync")
+    @set:PropertyName("ignore_sync")
+    var isSynced: Boolean = true
+)
+
+// =======================
+// 2. DATA MODEL TUGAS
+// =======================
+
 @Entity(tableName = "categories")
 data class Category(
-    @PrimaryKey(autoGenerate = true)
-    val id: Int = 0,
-    val title: String
+    @PrimaryKey val id: String = "",
+    val userId: String = "",
+    val title: String = "",
+    val type: String = "task",
+
+    @get:PropertyName("ignore_sync")
+    var isSynced: Boolean = true
 )
 
-// 2. TaskParent (Anak dari Kategori)
-@Entity(
-    tableName = "task_parents",
-    foreignKeys = [
-        ForeignKey(
-            entity = Category::class,
-            parentColumns = ["id"],
-            childColumns = ["categoryId"],
-            onDelete = ForeignKey.CASCADE // Jika Kategori dihapus, Task ikut terhapus
-        )
-    ]
-)
+@Entity(tableName = "tasks")
 data class TaskParent(
-    @PrimaryKey(autoGenerate = true)
-    val id: Int = 0,
-    val categoryId: Int, // Kunci asing ke Kategori
-    val title: String,
+    @PrimaryKey val id: String = "",
+    val userId: String = "",
+    val categoryId: String = "",
+    val title: String = "",
     val dueDate: Long? = null,
     val reminderTime: Long? = null,
-    val priority: String = "None"
+    val priority: String = "None",
+
+    @get:PropertyName("isCompleted")
+    @set:PropertyName("isCompleted")
+    var isCompleted: Boolean = false,
+
+    val createdAt: Long = System.currentTimeMillis(),
+
+    @get:PropertyName("ignore_sync")
+    var isSynced: Boolean = true
 )
 
-// 3. Subtask (Anak dari TaskParent)
-@Entity(
-    tableName = "subtasks",
-    foreignKeys = [
-        ForeignKey(
-            entity = TaskParent::class,
-            parentColumns = ["id"],
-            childColumns = ["taskParentId"],
-            onDelete = ForeignKey.CASCADE // Jika TaskParent dihapus, Subtask ikut terhapus
-        )
-    ]
-)
+@Entity(tableName = "subtasks")
 data class Subtask(
-    @PrimaryKey(autoGenerate = true)
-    val id: Int = 0,
-    val taskParentId: Int, // Kunci asing ke TaskParent
-    val title: String,
-    val isCompleted: Boolean
+    @PrimaryKey val id: String = "",
+    val taskId: String = "",
+    val title: String = "",
+
+    @get:PropertyName("isCompleted")
+    @set:PropertyName("isCompleted")
+    var isCompleted: Boolean = false,
+
+    @get:PropertyName("ignore_sync")
+    var isSynced: Boolean = true
 )
 
-// --- RELATIONAL CLASSES (Untuk Mengambil Data) ---
-
-// Menggabungkan TaskParent dengan list Subtask-nya
-data class TaskParentWithSubtasks(
-    @Embedded
-    val taskParent: TaskParent,
-
-    @Relation(
-        parentColumn = "id", // Dari TaskParent.id
-        entityColumn = "taskParentId" // Dari Subtask.taskParentId
-    )
-    val subtasks: List<Subtask>
-)
-
-// Menggabungkan Kategori dengan list Task-nya
-data class CategoryWithTasks(
-    @Embedded
-    val category: Category,
-
-    @Relation(
-        entity = TaskParent::class, // Kita butuh perantara
-        parentColumn = "id", // Dari Category.id
-        entityColumn = "categoryId" // Dari TaskParent.categoryId
-    )
-    val tasks: List<TaskParentWithSubtasks> // List of TaskParent...with their subtasks
-)
+// Helper class tetap sama...
+data class CategoryWithTasks(val category: Category, val tasks: List<TaskParentWithSubtasks>)
+data class TaskParentWithSubtasks(val taskParent: TaskParent, val subtasks: List<Subtask> = emptyList())

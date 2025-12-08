@@ -1,86 +1,94 @@
 package com.example.mobcomprojek.viewmodel
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import android.util.Log
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.mobcomprojek.data.Category
-import com.example.mobcomprojek.data.TaskParent
-import com.example.mobcomprojek.data.TaskParentWithSubtasks // Penting
-import com.example.mobcomprojek.data.TaskRepository
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
+import com.example.mobcomprojek.TaskApplication
+import com.example.mobcomprojek.data.*
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import java.time.Instant // Perlu di-import
-import java.time.LocalDate // Perlu di-import
-import java.time.ZoneId // Perlu di-import
 
-class TasksViewModel(private val repository: TaskRepository) : ViewModel() {
+// Ganti ViewModel() menjadi AndroidViewModel(application)
+class TasksViewModel(application: Application) : AndroidViewModel(application) {
 
-    // --- State untuk Kalender ---
+    // Ambil repository dari Application
+    private val repository = (application as TaskApplication).repository
 
-    // 1. Menyimpan tanggal yang dipilih (default: hari ini)
-    private val _selectedDate = MutableStateFlow(LocalDate.now())
-    val selectedDate = _selectedDate.asStateFlow()
+    // GANTI SEMUA 'FirestoreRepository' DENGAN 'repository' DI BAWAH INI
 
-    // --- State yang Sudah Ada ---
-    val categoriesWithTasks = repository.getCategoriesWithTasks()
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000L),
-            initialValue = emptyList()
-        )
-
-    // --- State Turunan (Derived) untuk Kalender ---
-
-    // 2. Map<LocalDate, List<Task>> untuk penanda di kalender
-    val tasksByDate = categoriesWithTasks.map { categories ->
-        categories
-            .flatMap { it.tasks } // Ambil semua task dari semua kategori
-            .filter { it.taskParent.dueDate != null } // Hanya task yang punya due date
-            .groupBy {
-                // Konversi Long timestamp ke LocalDate
-                Instant.ofEpochMilli(it.taskParent.dueDate!!)
-                    .atZone(ZoneId.systemDefault())
-                    .toLocalDate()
+    val categoriesWithTasks: StateFlow<List<CategoryWithTasks>> = combine(
+        repository.getCategoriesStream("task"),
+        repository.getTasksStream(),
+        repository.getAllSubtasksStream()
+    ) { categories, tasks, subtasks ->
+        categories.map { category ->
+            val tasksInCat = tasks.filter { it.categoryId == category.id }
+            val tasksWithSubs = tasksInCat.map { task ->
+                val subsForTask = subtasks.filter { it.taskId == task.id }
+                TaskParentWithSubtasks(task, subsForTask)
             }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), emptyMap())
-
-    // 3. List<Task> untuk list "Scheduled Tasks"
-    val tasksForSelectedDate = combine(tasksByDate, selectedDate) { tasks, date ->
-        tasks[date] ?: emptyList() // Ambil task untuk tanggal yang dipilih
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), emptyList())
-
-
-    // --- Fungsi ---
-
-    fun selectDate(date: LocalDate) {
-        _selectedDate.value = date
+            CategoryWithTasks(category, tasksWithSubs)
+        }
     }
+        .catch { e -> Log.e("TasksVM", "Error", e); emit(emptyList()) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun addCategory(title: String) = viewModelScope.launch {
-        repository.addCategory(title)
+        repository.addCategory(title, "task")
     }
 
-    fun addTask(categoryId: Int, title: String) = viewModelScope.launch {
-        repository.addTask(categoryId, title)
+    fun deleteCategory(id: String) = viewModelScope.launch {
+        repository.deleteCategory(id)
     }
 
-    fun renameCategory(category: Category, newTitle: String) = viewModelScope.launch {
-        repository.renameCategory(category.copy(title = newTitle))
+    fun renameCategory(cat: Category, name: String) = viewModelScope.launch {
+        repository.renameCategory(cat.id, name)
     }
 
-    fun deleteCategory(category: Category) = viewModelScope.launch {
-        repository.deleteCategory(category)
+    fun addTask(catId: String, title: String) = viewModelScope.launch {
+        repository.addTask(catId, title)
     }
 
-    fun renameTaskParent(taskParent: TaskParent, newTitle: String) = viewModelScope.launch {
-        repository.renameTaskParent(taskParent.copy(title = newTitle))
+    fun deleteTaskParent(t: TaskParent) = viewModelScope.launch {
+        repository.deleteTask(t.id)
     }
 
-    fun deleteTaskParent(taskParent: TaskParent) = viewModelScope.launch {
-        repository.deleteTaskParent(taskParent)
+    fun renameTaskParent(t: TaskParent, title: String) = viewModelScope.launch {
+        repository.updateTaskTitle(t.id, title)
+    }
+
+    fun toggleTaskCompletion(task: TaskParent) = viewModelScope.launch {
+        val newStatus = !task.isCompleted
+        // Kita butuh ID subtask, logic ini sama seperti sebelumnya tapi panggil repository
+        // Karena di viewmodel ini agak ribet ambil ID subtask dari flow,
+        // simplifikasi: panggil saja fungsi repo yg sudah kita buat.
+        // TAPI: Repository butuh list ID.
+        // Workaround cepat: Di DataRepository logic batch update bisa dioptimize.
+        // Untuk sekarang, kita ambil dari current value:
+        val currentData = categoriesWithTasks.value
+        val subtasks = currentData.flatMap { it.tasks }
+            .find { it.taskParent.id == task.id }?.subtasks ?: emptyList()
+        val subtaskIds = subtasks.map { it.id }
+
+        repository.toggleTaskAndSubtasksBatch(task.id, newStatus, subtaskIds)
+    }
+
+    fun toggleSubtaskCompletion(subtask: Subtask) = viewModelScope.launch {
+        val newStatus = !subtask.isCompleted
+        repository.updateSubtaskStatus(subtask.id, newStatus)
+
+        // Cek parent logic (sama seperti sebelumnya)
+        val currentData = categoriesWithTasks.value
+        val parentTaskData = currentData.flatMap { it.tasks }.find { it.taskParent.id == subtask.taskId }
+        if (parentTaskData != null) {
+            val allSubtasks = parentTaskData.subtasks
+            val areAllCompleted = allSubtasks.all {
+                if (it.id == subtask.id) newStatus else it.isCompleted
+            }
+            if (parentTaskData.taskParent.isCompleted != areAllCompleted) {
+                repository.updateTaskStatus(parentTaskData.taskParent.id, areAllCompleted)
+            }
+        }
     }
 }
