@@ -23,7 +23,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.example.mobcomprojek.viewmodel.NoteDetailViewModel
-import com.example.mobcomprojek.data.api.WeatherRepository // Import Repo Cuaca
+//import com.example.mobcomprojek.data.api.WeatherRepository
 import java.util.Locale
 import java.util.Date
 
@@ -70,8 +70,8 @@ fun NoteDetailScreen(
     val todayDate = remember { todayDateFormatter.format(Date()) }
 
     // === DATA CUACA (QoL Feature) ===
-    val weatherIcon = WeatherRepository.getWeatherIcon(WeatherRepository.currentWeatherCode)
-    val currentTemp = WeatherRepository.currentTemp
+//    val weatherIcon = WeatherRepository.getWeatherIcon(WeatherRepository.currentWeatherCode)
+//    val currentTemp = WeatherRepository.currentTemp
 
     Scaffold(
         modifier = modifier,
@@ -85,21 +85,21 @@ fun NoteDetailScreen(
                 },
                 actions = {
                     // === INTEGRASI CUACA (SEBELAH PIN) ===
-                    if (currentTemp != null) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(end = 12.dp)
-                        ) {
-                            Text(weatherIcon, style = MaterialTheme.typography.titleMedium)
-                            Spacer(Modifier.width(4.dp))
-                            Text(
-                                "${currentTemp.toInt()}°",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    }
+//                    if (currentTemp != null) {
+//                        Row(
+//                            verticalAlignment = Alignment.CenterVertically,
+//                            modifier = Modifier.padding(end = 12.dp)
+//                        ) {
+//                            Text(weatherIcon, style = MaterialTheme.typography.titleMedium)
+//                            Spacer(Modifier.width(4.dp))
+//                            Text(
+//                                "${currentTemp.toInt()}°",
+//                                style = MaterialTheme.typography.labelMedium,
+//                                fontWeight = FontWeight.Bold,
+//                                color = MaterialTheme.colorScheme.primary
+//                            )
+//                        }
+//                    }
 
                     // Ikon Pin
                     IconButton(onClick = { isPinned = !isPinned }) {

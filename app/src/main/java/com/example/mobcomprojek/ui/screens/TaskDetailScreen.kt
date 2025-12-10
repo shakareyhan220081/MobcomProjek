@@ -20,7 +20,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.example.mobcomprojek.data.Subtask
 import com.example.mobcomprojek.viewmodel.TaskDetailViewModel
-import com.example.mobcomprojek.data.api.WeatherRepository // Import untuk Cuaca
+//import com.example.mobcomprojek.data.api.WeatherRepository
 import java.util.Date
 import java.util.Locale
 
@@ -83,8 +83,8 @@ fun TaskDetailScreen(
     val timeFormatter = SimpleDateFormat("hh:mm a", Locale.getDefault())
 
     // === DATA CUACA (QoL Feature) ===
-    val weatherIcon = WeatherRepository.getWeatherIcon(WeatherRepository.currentWeatherCode)
-    val currentTemp = WeatherRepository.currentTemp
+//    val weatherIcon = WeatherRepository.getWeatherIcon(WeatherRepository.currentWeatherCode)
+//    val currentTemp = WeatherRepository.currentTemp
 
     // === LOGIC ===
 
@@ -241,22 +241,22 @@ fun TaskDetailScreen(
                             }
 
                             // Column 3: WEATHER INFO (Integrasi API)
-                            Column(horizontalAlignment = Alignment.End) {
-                                Text("Forecast", style = MaterialTheme.typography.labelSmall)
-                                if (currentTemp != null) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text(weatherIcon, style = MaterialTheme.typography.titleMedium)
-                                        Spacer(Modifier.width(4.dp))
-                                        Text(
-                                            "${currentTemp.toInt()}°C",
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-                                } else {
-                                    Text("N/A", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                            }
+//                            Column(horizontalAlignment = Alignment.End) {
+//                                Text("Forecast", style = MaterialTheme.typography.labelSmall)
+//                                if (currentTemp != null) {
+//                                    Row(verticalAlignment = Alignment.CenterVertically) {
+//                                        Text(weatherIcon, style = MaterialTheme.typography.titleMedium)
+//                                        Spacer(Modifier.width(4.dp))
+//                                        Text(
+//                                            "${currentTemp.toInt()}°C",
+//                                            style = MaterialTheme.typography.bodyMedium,
+//                                            fontWeight = FontWeight.Bold
+//                                        )
+//                                    }
+//                                } else {
+//                                    Text("N/A", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+//                                }
+//                            }
                         }
                     }
                 }

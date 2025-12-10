@@ -31,7 +31,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.example.mobcomprojek.data.api.WeatherRepository
+//import com.example.mobcomprojek.data.api.WeatherRepository
 import com.example.mobcomprojek.data.local.UserPreferences
 import com.example.mobcomprojek.ui.navigation.Screen
 import com.example.mobcomprojek.ui.screens.*
@@ -49,20 +49,20 @@ class MainActivity : ComponentActivity() {
     private lateinit var fusedLocationClient: FusedLocationProviderClient
 
     // Launcher untuk meminta izin lokasi secara popup
-    private val requestPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissions ->
-        val fineLocationGranted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] ?: false
-        val coarseLocationGranted = permissions[Manifest.permission.ACCESS_COARSE_LOCATION] ?: false
-
-        if (fineLocationGranted || coarseLocationGranted) {
-            // Izin diberikan user, ambil lokasi
-            getUserLocationAndFetchWeather()
-        } else {
-            // Izin ditolak, biarkan cuaca kosong (fitur nonaktif)
-            Log.d("MainActivity", "Izin lokasi ditolak. Cuaca dinonaktifkan.")
-        }
-    }
+//    private val requestPermissionLauncher = registerForActivityResult(
+//        ActivityResultContracts.RequestMultiplePermissions()
+//    ) { permissions ->
+//        val fineLocationGranted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] ?: false
+//        val coarseLocationGranted = permissions[Manifest.permission.ACCESS_COARSE_LOCATION] ?: false
+//
+////        if (fineLocationGranted || coarseLocationGranted) {
+////            // Izin diberikan user, ambil lokasi
+////            getUserLocationAndFetchWeather()
+////        } else {
+////            // Izin ditolak, biarkan cuaca kosong (fitur nonaktif)
+////            Log.d("MainActivity", "Izin lokasi ditolak. Cuaca dinonaktifkan.")
+////        }
+//    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -76,20 +76,20 @@ class MainActivity : ComponentActivity() {
 
         // --- LOGIC CUACA BERBASIS LOKASI ---
         // Cek apakah izin sudah ada?
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
-            ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
-        ) {
-            // Sudah diizinkan sebelumnya -> Langsung ambil lokasi
-            getUserLocationAndFetchWeather()
-        } else {
-            // Belum diizinkan -> Minta izin ke user
-            requestPermissionLauncher.launch(
-                arrayOf(
-                    Manifest.permission.ACCESS_FINE_LOCATION,
-                    Manifest.permission.ACCESS_COARSE_LOCATION
-                )
-            )
-        }
+//        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+//            ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+//        ) {
+//            // Sudah diizinkan sebelumnya -> Langsung ambil lokasi
+//            getUserLocationAndFetchWeather()
+//        } else {
+//            // Belum diizinkan -> Minta izin ke user
+//            requestPermissionLauncher.launch(
+//                arrayOf(
+//                    Manifest.permission.ACCESS_FINE_LOCATION,
+//                    Manifest.permission.ACCESS_COARSE_LOCATION
+//                )
+//            )
+//        }
 
         setContent {
             val systemDark = isSystemInDarkTheme()
@@ -115,32 +115,32 @@ class MainActivity : ComponentActivity() {
     }
 
     // Fungsi Helper: Ambil Lat/Lon dari HP -> Panggil API
-    private fun getUserLocationAndFetchWeather() {
-        try {
-            // Cek permission lagi (syarat Android) walau sudah dicek di atas
-            if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
-                ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED
-            ) {
-                return
-            }
-
-            fusedLocationClient.lastLocation.addOnSuccessListener { location ->
-                if (location != null) {
-                    // Lokasi ketemu! Panggil API Weather
-                    Log.d("MainActivity", "Lokasi HP: ${location.latitude}, ${location.longitude}")
-                    lifecycleScope.launch {
-                        WeatherRepository.fetchWeather(location.latitude, location.longitude)
-                    }
-                } else {
-                    // Lokasi null (biasanya HP baru nyala / GPS mati total)
-                    // Kita bisa pakai default (misal Jakarta) atau biarkan kosong
-                    Log.d("MainActivity", "Lokasi null (GPS mati/belum dapat sinyal)")
-                }
-            }
-        } catch (e: Exception) {
-            Log.e("MainActivity", "Error get location: ${e.message}")
-        }
-    }
+//    private fun getUserLocationAndFetchWeather() {
+//        try {
+//            // Cek permission lagi (syarat Android) walau sudah dicek di atas
+//            if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
+//                ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED
+//            ) {
+//                return
+//            }
+//
+//            fusedLocationClient.lastLocation.addOnSuccessListener { location ->
+//                if (location != null) {
+//                    // Lokasi ketemu! Panggil API Weather
+//                    Log.d("MainActivity", "Lokasi HP: ${location.latitude}, ${location.longitude}")
+//                    lifecycleScope.launch {
+//                        WeatherRepository.fetchWeather(location.latitude, location.longitude)
+//                    }
+//                } else {
+//                    // Lokasi null (biasanya HP baru nyala / GPS mati total)
+//                    // Kita bisa pakai default (misal Jakarta) atau biarkan kosong
+//                    Log.d("MainActivity", "Lokasi null (GPS mati/belum dapat sinyal)")
+//                }
+//            }
+//        } catch (e: Exception) {
+//            Log.e("MainActivity", "Error get location: ${e.message}")
+//        }
+//    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
